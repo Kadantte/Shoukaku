@@ -1,650 +1,546 @@
-import { EventEmitter } from 'events';
-import { Node, VoiceChannelOptions } from '../node/Node';
-import { mergeDefault } from '../Utils';
-import { OPCodes, State } from '../Constants';
+// eslint-disable-next-line import-x/no-cycle
+import { OpCodes, State } from '../Constants';
+// eslint-disable-next-line import-x/no-cycle
+import { Node } from '../node/Node';
+// eslint-disable-next-line import-x/no-cycle
+import { Exception, Track, UpdatePlayerInfo, UpdatePlayerOptions } from '../node/Rest';
+import { TypedEventEmitter } from '../Utils';
 import { Connection } from './Connection';
 
-export type TrackEndReason = 'FINISHED' | 'LOAD_FAILED' | 'STOPPED' | 'REPLACED' | 'CLEANUP';
-export type Severity = 'COMMON' | 'SUSPICIOUS' | 'FAULT';
-export type PlayerEventType = 'TrackStartEvent' | 'TrackEndEvent' | 'TrackExceptionEvent' | 'TrackStuckEvent' | 'WebSocketClosedEvent';
+export type TrackEndReason = 'finished' | 'loadFailed' | 'stopped' | 'replaced' | 'cleanup';
+export type PlayOptions = Omit<UpdatePlayerOptions, 'filters' | 'voice'>;
+export type ResumeOptions = Omit<UpdatePlayerOptions, 'track' | 'filters' | 'voice'>;
 
-/**
- * Options when playing a new track
- */
-export interface PlayOptions {
-    track: string;
-    options?: {
-        noReplace?: boolean;
-        pause?: boolean;
-        startTime?: number;
-        endTime?: number;
-    }
-}
-
-export interface PlayPayload {
-    op: string;
-    guildId: string;
-    track: string;
-    noReplace: boolean;
-    pause: boolean;
-    startTime?: number;
-    endTime?: number;
-}
-
-export interface ResumeOptions {
-    noReplace?: boolean;
-    pause?: boolean;
-    startTime?: number;
-    endtime?: number;
+export enum PlayerEventType {
+	TRACK_START_EVENT = 'TrackStartEvent',
+	TRACK_END_EVENT = 'TrackEndEvent',
+	TRACK_EXCEPTION_EVENT = 'TrackExceptionEvent',
+	TRACK_STUCK_EVENT = 'TrackStuckEvent',
+	WEBSOCKET_CLOSED_EVENT = 'WebSocketClosedEvent'
 }
 
 export interface Band {
-    band: number;
-    gain: number;
+	band: number;
+	gain: number;
 }
 
 export interface KaraokeSettings {
-    level?: number;
-    monoLevel?: number;
-    filterBand?: number;
-    filterWidth?: number;
+	level?: number;
+	monoLevel?: number;
+	filterBand?: number;
+	filterWidth?: number;
 }
 
 export interface TimescaleSettings {
-    speed?: number;
-    pitch?: number;
-    rate?: number;
+	speed?: number;
+	pitch?: number;
+	rate?: number;
 }
 
 export interface FreqSettings {
-    frequency?: number;
-    depth?: number;
+	frequency?: number;
+	depth?: number;
 }
 
 export interface RotationSettings {
-    rotationHz?: number;
+	rotationHz?: number;
 }
 
 export interface DistortionSettings {
-    sinOffset?: number;
-    sinScale?: number;
-    cosOffset?: number;
-    cosScale?: number;
-    tanOffset?: number;
-    tanScale?: number;
-    offset?: number;
-    scale?: number;
+	sinOffset?: number;
+	sinScale?: number;
+	cosOffset?: number;
+	cosScale?: number;
+	tanOffset?: number;
+	tanScale?: number;
+	offset?: number;
+	scale?: number;
 }
 
 export interface ChannelMixSettings {
-    leftToLeft?: number;
-    leftToRight?: number;
-    rightToLeft?: number;
-    rightToRight?: number;
+	leftToLeft?: number;
+	leftToRight?: number;
+	rightToLeft?: number;
+	rightToRight?: number;
 }
 
 export interface LowPassSettings {
-    smoothing?: number
+	smoothing?: number;
 }
 
 export interface PlayerEvent {
-    op: OPCodes.EVENT;
-    type: PlayerEventType;
-    guildId: string;
-}
-
-export interface Exception {
-    severity: Severity;
-    message: string;
-    cause: string;
+	op: OpCodes.EVENT;
+	guildId: string;
 }
 
 export interface TrackStartEvent extends PlayerEvent {
-    type: 'TrackStartEvent';
-    track: string;
+	type: PlayerEventType.TRACK_START_EVENT;
+	track: Track;
 }
 
 export interface TrackEndEvent extends PlayerEvent {
-    type: 'TrackEndEvent';
-    track: string;
-    reason: TrackEndReason;
+	type: PlayerEventType.TRACK_END_EVENT;
+	track: Track;
+	reason: TrackEndReason;
 }
 
 export interface TrackStuckEvent extends PlayerEvent {
-    type: 'TrackStuckEvent';
-    track: string;
-    thresholdMs: number;
+	type: PlayerEventType.TRACK_STUCK_EVENT;
+	track: Track;
+	thresholdMs: number;
 }
 
 export interface TrackExceptionEvent extends PlayerEvent {
-    type: 'TrackExceptionEvent';
-    exception?: Exception;
-    error: string;
-}
-
-export interface TrackStuckEvent extends PlayerEvent {
-    type: 'TrackStuckEvent';
-    thresholdMs: number;
+	type: PlayerEventType.TRACK_EXCEPTION_EVENT;
+	exception: Exception;
 }
 
 export interface WebSocketClosedEvent extends PlayerEvent {
-    type: 'WebSocketClosedEvent';
-    code: number;
-    byRemote: boolean;
-    reason: string;
+	type: PlayerEventType.WEBSOCKET_CLOSED_EVENT;
+	code: number;
+	byRemote: boolean;
+	reason: string;
 }
 
 export interface PlayerUpdate {
-    op: OPCodes.PLAYER_UPDATE;
-    state: {
-      connected: boolean;
-      position?: number;
-      time: number;
-    };
-    guildId: string;
+	op: OpCodes.PLAYER_UPDATE;
+	state: {
+		connected: boolean;
+		position: number;
+		time: number;
+		ping: number;
+	};
+	guildId: string;
 }
 
 export interface FilterOptions {
-    volume?: number;
-    equalizer?: Band[];
-    karaoke?: KaraokeSettings|null;
-    timescale?: TimescaleSettings|null;
-    tremolo?: FreqSettings|null;
-    vibrato?: FreqSettings|null;
-    rotation?: RotationSettings|null;
-    distortion?: DistortionSettings|null;
-    channelMix?: ChannelMixSettings|null;
-    lowPass?: LowPassSettings|null;
+	volume?: number;
+	equalizer?: Band[];
+	karaoke?: KaraokeSettings | null;
+	timescale?: TimescaleSettings | null;
+	tremolo?: FreqSettings | null;
+	vibrato?: FreqSettings | null;
+	rotation?: RotationSettings | null;
+	distortion?: DistortionSettings | null;
+	channelMix?: ChannelMixSettings | null;
+	lowPass?: LowPassSettings | null;
 }
 
-/**
- * Lavalink filters
- */
-export class Filters {
-    public volume: number;
-    public equalizer: Band[];
-    public karaoke: KaraokeSettings|null;
-    public timescale: TimescaleSettings|null;
-    public tremolo: FreqSettings|null;
-    public vibrato: FreqSettings|null;
-    public rotation: RotationSettings|null;
-    public distortion: DistortionSettings|null;
-    public channelMix: ChannelMixSettings|null;
-    public lowPass: LowPassSettings|null;
-    /**
-     * Options to initialize this filters instance with
-     * @param options.volume The volume to play audio at as a decimal
-     * @param options.equalizer An array of objects that conforms to the Bands type that define volumes at different frequencies
-     * @param options.karaoke An object that conforms to the KaraokeSettings type that defines a range of frequencies to mute
-     * @param options.timescale An object that conforms to the TimescaleSettings type that defines the time signature to play the audio at
-     * @param options.tremolo An object that conforms to the FreqSettings type that defines an ocillation in volume
-     * @param options.vibrato An object that conforms to the FreqSettings type that defines an ocillation in pitch
-     * @param options.rotation An object that conforms to the RotationSettings type that defines the frequency of audio rotating round the listener
-     * @param options.distortion An object that conforms to DistortionSettings that defines distortions in the audio
-     * @param options.channelMix An object that conforms to ChannelMixSettings that defines how much the left and right channels affect each other (setting all factors to 0.5 causes both channels to get the same audio)
-     * @param options.lowPass An object that conforms to LowPassSettings that defines the amount of suppression on higher frequencies
-     */
-    constructor(options: FilterOptions = {}) {
-        this.volume = options.volume ?? 1.0;
-        this.equalizer = options.equalizer || [];
-        this.karaoke = options.karaoke || null;
-        this.timescale = options.timescale || null;
-        this.tremolo = options.tremolo || null;
-        this.vibrato = options.vibrato || null;
-        this.rotation = options.rotation || null;
-        this.distortion = options.distortion || null;
-        this.channelMix = options.channelMix || null;
-        this.lowPass = options.lowPass || null;
-    }
-}
-
-export declare interface Player {
-    /**
-     * Emitted when the current playing track ends
-     * @eventProperty
-     */
-    on(event: 'end', listener: (reason: TrackEndEvent) => void): this;
-    /**
-     * Emitted when the current playing track gets stuck due to an error
-     * @eventProperty
-     */
-    on(event: 'stuck', listener: (data: TrackStuckEvent) => void): this;
-    /**
-     * Emitted when the current websocket connection is closed
-     * @eventProperty
-     */
-    on(event: 'closed', listener: (reason: WebSocketClosedEvent) => void): this;
-    /**
-     * Emitted when a new track starts
-     * @eventProperty
-     */
-    on(event: 'start', listener: (data: TrackStartEvent) => void): this;
-    /**
-     * Emitted when there is an error caused by the current playing track
-     * @eventProperty
-     */
-    on(event: 'exception', listener: (reason: TrackExceptionEvent) => void): this;
-    /**
-     * Emitted when the library manages to resume the player
-     * @eventProperty
-     */
-    on(event: 'resumed', listener: () => void): this;
-    /**
-     * Emitted when a playerUpdate even is recieved from Lavalink
-     * @eventProperty
-     */
-    on(event: 'update', listener: (data: PlayerUpdate) => void): this;
-    once(event: 'end', listener: (reason: TrackEndEvent) => void): this;
-    once(event: 'stuck', listener: (data: TrackStuckEvent) => void): this;
-    once(event: 'closed', listener: (reason: WebSocketClosedEvent) => void): this;
-    once(event: 'start', listener: (data: TrackStartEvent) => void): this;
-    once(event: 'exception', listener: (reason: TrackExceptionEvent) => void): this;
-    once(event: 'resumed', listener: () => void): this;
-    once(event: 'update', listener: (data: PlayerUpdate) => void): this;
-    off(event: 'end', listener: (reason: TrackEndEvent) => void): this;
-    off(event: 'stuck', listener: (data: TrackStuckEvent) => void): this;
-    off(event: 'closed', listener: (reason: WebSocketClosedEvent) => void): this;
-    off(event: 'start', listener: (data: TrackStartEvent) => void): this;
-    off(event: 'exception', listener: (reason: TrackExceptionEvent) => void): this;
-    off(event: 'resumed', listener: () => void): this;
-    off(event: 'update', listener: (data: PlayerUpdate) => void): this;
-}
+// Interfaces are not final, but types are, and therefore has an index signature
+// https://stackoverflow.com/a/64970740
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+export type PlayerEvents = {
+	/**
+	 * Emitted when the current playing track ends
+	 * @eventProperty
+	 */
+	'end': [reason: TrackEndEvent];
+	/**
+	 * Emitted when the current playing track gets stuck due to an error
+	 * @eventProperty
+	 */
+	'stuck': [data: TrackStuckEvent];
+	/**
+	 * Emitted when the current websocket connection is closed
+	 * @eventProperty
+	 */
+	'closed': [reason: WebSocketClosedEvent];
+	/**
+	 * Emitted when a new track starts
+	 * @eventProperty
+	 */
+	'start': [data: TrackStartEvent];
+	/**
+	 * Emitted when there is an error caused by the current playing track
+	 * @eventProperty
+	 */
+	'exception': [reason: TrackExceptionEvent];
+	/**
+	 * Emitted when the library manages to resume the player
+	 * @eventProperty
+	 */
+	'resumed': [player: Player];
+	/**
+	 * Emitted when a playerUpdate even is received from Lavalink
+	 * @eventProperty
+	 */
+	'update': [data: PlayerUpdate];
+};
 
 /**
  * Wrapper object around Lavalink
  */
-export class Player extends EventEmitter {
-    /**
-     * Lavalink node this player is connected to
-     */
-    public node: Node;
-    /**
-     * Discort voice channel that this player is connected to
-     */
-    public readonly connection: Connection;
-    /**
-     * ID of current track
-     */
-    public track: string|null;
-    /**
-     * Pause status in current player
-     */
-    public paused: boolean;
-    /**
-     * Ping represents the number of milliseconds between heartbeat and ack. Could be `-1` if not connected
-     */
-    public ping: number;
-    /**
-     * Position in ms of current track
-     */
-    public position: number;
-    /**
-     * Filters on current track
-     */
-    public filters: Filters;
-    /**
-     * @param node An instance of Node (Lavalink API wrapper)
-     * @param options.guildId Guild ID in which voice channel to connect to is located
-     * @param options.shardId Shard ID in which the guild exists
-     * @param options.channelId Channel ID of voice channel to connect to
-     * @param options.deaf Optional boolean value to specify whether to deafen the current bot user
-     * @param options.mute Optional boolean value to specify whether to mute the current bot user
-     */
-    constructor(node: Node, options: VoiceChannelOptions) {
-        super();
-        this.node = node;
-        this.connection = new Connection(this, options);
-        this.track = null;
-        this.paused = false;
-        this.position = 0;
-        this.ping = 0;
-        this.filters = new Filters();
-    }
+export class Player extends TypedEventEmitter<PlayerEvents> {
+	/**
+	 * GuildId of this player
+	 */
+	public readonly guildId: string;
+	/**
+	 * Lavalink node this player is connected to
+	 */
+	public node: Node;
+	/**
+	 * Base64 encoded data of the current track
+	 */
+	public track: string | null;
+	/**
+	 * Global volume of the player
+	 */
+	public volume: number;
+	/**
+	 * Pause status in current player
+	 */
+	public paused: boolean;
+	/**
+	 * Ping represents the number of milliseconds between heartbeat and ack. Could be `-1` if not connected
+	 */
+	public ping: number;
+	/**
+	 * Position in ms of current track
+	 */
+	public position: number;
+	/**
+	 * Filters on current track
+	 */
+	public filters: FilterOptions;
 
-    /**
-     * Move player to another node
-     * @param name Name of node to move to
-     * @returns The current player instance
-     */
-    public move(name: string): Player {
-        const node = this.node.manager.nodes.get(name);
-        if (!node || node.name === this.node.name) return this;
-        if (node.state !== State.CONNECTED) throw new Error('The node you specified is not ready');
+	constructor(guildId: string, node: Node) {
+		super();
+		this.guildId = guildId;
+		this.node = node;
+		this.track = null;
+		this.volume = 100;
+		this.paused = false;
+		this.position = 0;
+		this.ping = 0;
+		this.filters = {};
+	}
 
-        this.connection.destroyLavalinkPlayer();
-        this.node.players.delete(this.connection.guildId);
-        this.node = node;
-        this.node.players.set(this.connection.guildId, this);
-        this.connection.resendServerUpdate();
-        this.resume();
-        return this;
-    }
+	public get data(): UpdatePlayerInfo {
+		const connection = this.node.manager.connections.get(this.guildId)!;
+		return {
+			guildId: this.guildId,
+			playerOptions: {
+				track: {
+					encoded: this.track
+				},
+				position: this.position,
+				paused: this.paused,
+				filters: this.filters,
+				voice: {
+					token: connection.serverUpdate!.token,
+					endpoint: connection.serverUpdate!.endpoint,
+					sessionId: connection.sessionId!
+				},
+				volume: this.volume
+			}
+		};
+	}
 
-    /**
-     * Play a new track
-     * @param playable Options for playing this track
-     * @returns The current player instance
-     */
-    public playTrack(playable: PlayOptions): Player {
-        const payload: PlayPayload = {
-            op: OPCodes.PLAY,
-            guildId: this.connection.guildId,
-            track: playable.track,
-            noReplace: playable.options?.noReplace ?? true,
-            pause: playable.options?.pause ?? false
-        };
+	/**
+	 * Move player to another node
+	 * @param name Name of node to move to, or the default ideal node
+	 * @returns true if the player was moved, false if not
+	 */
+	public async move(name?: string): Promise<boolean> {
+		const connection = this.node.manager.connections.get(this.guildId);
+		const node = this.node.manager.nodes.get(name!) ?? this.node.manager.getIdealNode(connection);
 
-        if (playable.options?.startTime) payload.startTime = playable.options.startTime;
-        if (playable.options?.endTime) payload.endTime = playable.options.startTime;
+		if (!node && ![ ...this.node.manager.nodes.values() ].some(node => node.state === State.CONNECTED))
+			throw new Error('No available nodes to move to');
 
-        this.node.queue.add(payload);
-        this.track = playable.track;
-        this.paused = playable.options?.pause ?? false;
-        this.position = 0;
+		if (!node || node.name === this.node.name || node.state !== State.CONNECTED) return false;
 
-        return this;
-    }
+		let lastNode = this.node.manager.nodes.get(this.node.name);
+		if (!lastNode || lastNode.state !== State.CONNECTED)
+			lastNode = this.node.manager.getIdealNode(connection);
 
-    /**
-     * Stop the currently playing track
-     * @returns The current player instance
-     */
-    public stopTrack(): Player {
-        this.position = 0;
-        this.node.queue.add({
-            op: OPCodes.STOP,
-            guildId: this.connection.guildId
-        });
+		await this.destroy();
 
-        return this;
-    }
+		try {
+			this.node = node;
+			await this.resume();
+			return true;
+		} catch {
+			this.node = lastNode!;
+			await this.resume();
+			return false;
+		}
+	}
 
-    /**
-     * Pause or unpause the currently playing track
-     * @param pause Boolean value to specify whether to pause or unpause the current bot user
-     * @returns The current player instance
-     */
-    public setPaused(pause = true): Player {
-        this.node.queue.add({
-            op: OPCodes.PAUSE,
-            guildId: this.connection.guildId,
-            pause
-        });
+	/**
+	 * Destroys the player in remote lavalink side
+	 */
+	public async destroy(): Promise<void> {
+		await this.node.rest.destroyPlayer(this.guildId);
+	}
 
-        this.paused = pause;
-        return this;
-    }
+	/**
+	 * Play a new track
+	 */
+	public playTrack(playerOptions: PlayOptions, noReplace = false): Promise<void> {
+		return this.update(playerOptions, noReplace);
+	}
 
-    /**
-     * Seek to a specific time in the currently playing track
-     * @param position Position to seek to in milliseconds
-     * @returns The current player instance
-     */
-    public seekTo(position: number): Player {
-        this.node.queue.add({
-            op: OPCodes.SEEK,
-            guildId: this.connection.guildId,
-            position
-        });
+	/**
+	 * Stop the currently playing track
+	 */
+	public stopTrack(): Promise<void> {
+		return this.update({ track: { encoded: null }, position: 0 });
+	}
 
-        return this;
-    }
+	/**
+	 * Pause or unpause the currently playing track
+	 * @param paused Boolean value to specify whether to pause or unpause the current bot user
+	 */
+	public setPaused(paused = true): Promise<void> {
+		return this.update({ paused });
+	}
 
-    /**
-     * Change the volume of the currently playing track
-     * @param volume Target volume as a decimal
-     * @returns The current player instance
-     */
-    public setVolume(volume: number): Player {
-        volume = Math.min(5, Math.max(0, volume));
-        this.filters.volume = volume;
-        this.updateFilters();
+	/**
+	 * Seek to a specific time in the currently playing track
+	 * @param position Position to seek to in milliseconds
+	 */
+	public seekTo(position: number): Promise<void> {
+		return this.update({ position });
+	}
 
-        return this;
-    }
+	/**
+	 * Sets the global volume of the player
+	 * @param volume Target volume 0-1000
+	 */
+	public setGlobalVolume(volume: number): Promise<void> {
+		return this.update({ volume });
+	}
 
-    /**
-     * Change the equalizer settings applied to the currently playing track
-     * @param bands An array of objects that conforms to the Bands type that define volumes at different frequencies
-     * @returns The current player instance
-     */
-    public setEqualizer(bands: Band[]): Player {
-        this.filters.equalizer = bands;
-        this.updateFilters();
+	/**
+	 * Sets the filter volume of the player
+	 * @param volume Target volume 0.0-5.0
+	 */
+	async setFilterVolume(volume: number): Promise<void> {
+		return this.setFilters({ volume });
+	}
 
-        return this;
-    }
+	/**
+	 * Change the equalizer settings applied to the currently playing track
+	 * @param equalizer An array of objects that conforms to the Bands type that define volumes at different frequencies
+	 */
+	public async setEqualizer(equalizer: Band[]): Promise<void> {
+		return this.setFilters({ equalizer });
+	}
 
-    /**
-     * Change the karaoke settings applied to the currently playing track
-     * @param karaoke An object that conforms to the KaraokeSettings type that defines a range of frequencies to mute
-     * @returns The current player instance
-     */
-    public setKaraoke(karaoke?: KaraokeSettings): Player {
-        this.filters.karaoke = karaoke|| null;
-        this.updateFilters();
+	/**
+	 * Change the karaoke settings applied to the currently playing track
+	 * @param karaoke An object that conforms to the KaraokeSettings type that defines a range of frequencies to mute
+	 */
+	public setKaraoke(karaoke?: KaraokeSettings): Promise<void> {
+		return this.setFilters({ karaoke: karaoke ?? null });
+	}
 
-        return this;
-    }
+	/**
+	 * Change the timescale settings applied to the currently playing track
+	 * @param timescale An object that conforms to the TimescaleSettings type that defines the time signature to play the audio at
+	 */
+	public setTimescale(timescale?: TimescaleSettings): Promise<void> {
+		return this.setFilters({ timescale: timescale ?? null });
+	}
 
-    /**
-     * Change the timescale settings applied to the currently playing track
-     * @param timescale An object that conforms to the TimescaleSettings type that defines the time signature to play the audio at
-     * @returns The current player instance
-     */
-    public setTimescale(timescale?: TimescaleSettings): Player {
-        this.filters.timescale = timescale || null;
-        this.updateFilters();
+	/**
+	 * Change the tremolo settings applied to the currently playing track
+	 * @param tremolo An object that conforms to the FreqSettings type that defines an oscillation in volume
+	 */
+	public setTremolo(tremolo?: FreqSettings): Promise<void> {
+		return this.setFilters({ tremolo: tremolo ?? null });
+	}
 
-        return this;
-    }
+	/**
+	 * Change the vibrato settings applied to the currently playing track
+	 * @param vibrato An object that conforms to the FreqSettings type that defines an oscillation in pitch
+	 */
+	public setVibrato(vibrato?: FreqSettings): Promise<void> {
+		return this.setFilters({ vibrato: vibrato ?? null });
+	}
 
-    /**
-     * Change the tremolo settings applied to the currently playing track
-     * @param tremolo An object that conforms to the FreqSettings type that defines an ocillation in volume
-     * @returns The current player instance
-     */
-    public setTremolo(tremolo?: FreqSettings): Player {
-        this.filters.tremolo = tremolo || null;
-        this.updateFilters();
+	/**
+	 * Change the rotation settings applied to the currently playing track
+	 * @param rotation An object that conforms to the RotationSettings type that defines the frequency of audio rotating round the listener
+	 */
+	public setRotation(rotation?: RotationSettings): Promise<void> {
+		return this.setFilters({ rotation: rotation ?? null });
+	}
 
-        return this;
-    }
+	/**
+	 * Change the distortion settings applied to the currently playing track
+	 * @param distortion An object that conforms to DistortionSettings that defines distortions in the audio
+	 * @returns The current player instance
+	 */
+	public setDistortion(distortion?: DistortionSettings): Promise<void> {
+		return this.setFilters({ distortion: distortion ?? null });
+	}
 
-    /**
-     * Change the vibrato settings applied to the currently playing track
-     * @param vibrato An object that conforms to the FreqSettings type that defines an ocillation in pitch
-     * @returns The current player instance
-     */
-    public setVibrato(vibrato?: FreqSettings): Player {
-        this.filters.vibrato = vibrato || null;
-        this.updateFilters();
+	/**
+	 * Change the channel mix settings applied to the currently playing track
+	 * @param channelMix An object that conforms to ChannelMixSettings that defines how much the left and right channels affect each other (setting all factors to 0.5 causes both channels to get the same audio)
+	 */
+	public setChannelMix(channelMix?: ChannelMixSettings): Promise<void> {
+		return this.setFilters({ channelMix: channelMix ?? null });
+	}
 
-        return this;
-    }
+	/**
+	 * Change the low pass settings applied to the currently playing track
+	 * @param lowPass An object that conforms to LowPassSettings that defines the amount of suppression on higher frequencies
+	 */
+	public setLowPass(lowPass?: LowPassSettings): Promise<void> {
+		return this.setFilters({ lowPass: lowPass ?? null });
+	}
 
-    /**
-     * Change the rotation settings applied to the currently playing track
-     * @param rotation An object that conforms to the RotationSettings type that defines the frequency of audio rotating round the listener
-     * @returns The current player instance
-     */
-    public setRotation(rotation?: RotationSettings): Player {
-        this.filters.rotation = rotation || null;
-        this.updateFilters();
+	/**
+	 * Change the all filter settings applied to the currently playing track
+	 * @param filters An object that conforms to FilterOptions that defines all filters to apply/modify
+	 */
+	public setFilters(filters: FilterOptions): Promise<void> {
+		return this.update({ filters });
+	}
 
-        return this;
-    }
+	/**
+	 * Clear all filters applied to the currently playing track
+	 */
+	public clearFilters(): Promise<void> {
+		return this.setFilters({
+			volume: 1,
+			equalizer: [],
+			karaoke: null,
+			timescale: null,
+			tremolo: null,
+			vibrato: null,
+			rotation: null,
+			distortion: null,
+			channelMix: null,
+			lowPass: null
+		});
+	}
 
-    /**
-     * Change the distortion settings applied to the currently playing track
-     * @param distortion An object that conforms to DistortionSettings that defines distortions in the audio
-     * @returns The current player instance
-     */
-    public setDistortion(distortion: DistortionSettings): Player {
-        this.filters.distortion = distortion || null;
-        this.updateFilters();
+	/**
+	 * Resumes the current track
+	 * @param options An object that conforms to ResumeOptions that specify behavior on resuming
+	 * @param noReplace Set it to true if you don't want to replace the currently playing track
+	 */
+	public async resume(options: ResumeOptions = {}, noReplace = false): Promise<void> {
+		const data = this.data;
 
-        return this;
-    }
+		if (typeof options.position === 'number')
+			data.playerOptions.position = options.position;
+		if (typeof options.endTime === 'number')
+			data.playerOptions.endTime = options.endTime;
+		if (typeof options.paused === 'boolean')
+			data.playerOptions.paused = options.paused;
+		if (typeof options.volume === 'number')
+			data.playerOptions.volume = options.volume;
 
-    /**
-     * Change the channel mix settings applied to the currently playing track
-     * @param mix An object that conforms to ChannelMixSettings that defines how much the left and right channels affect each other (setting all factors to 0.5 causes both channels to get the same audio)
-     * @returns The current player instance
-     */
-    public setChannelMix(mix: ChannelMixSettings): Player {
-        this.filters.channelMix = mix || null;
-        this.updateFilters();
+		await this.update(data.playerOptions, noReplace);
 
-        return this;
-    }
+		this.emit('resumed', this);
+	}
 
-    /**
-     * Change the low pass settings applied to the currently playing track
-     * @param pass An object that conforms to LowPassSettings that defines the amount of suppression on higher frequencies
-     * @returns The current player instance
-     */
-    public setLowPass(pass: LowPassSettings): Player {
-        this.filters.lowPass = pass || null;
-        this.updateFilters();
+	/**
+	 * If you want to update the whole player yourself, sends raw update player info to lavalink
+	 * @param playerOptions Options to update the player data
+	 * @param noReplace Set it to true if you don't want to replace the currently playing track
+	 */
+	public async update(playerOptions: UpdatePlayerOptions, noReplace = false): Promise<void> {
+		const data = {
+			guildId: this.guildId,
+			noReplace,
+			playerOptions
+		};
 
-        return this;
-    }
+		await this.node.rest.updatePlayer(data);
 
-    /**
-     * Change the all filter settings applied to the currently playing track
-     * @param options An object that conforms to FilterOptions that defines all filters to apply/modify
-     * @returns The current player instance
-     */
-    public setFilters(options: FilterOptions): Player {
-        this.filters = new Filters(options);
-        this.updateFilters();
+		if (!noReplace) this.paused = false;
 
-        return this;
-    }
+		if (playerOptions.filters) {
+			this.filters = { ...this.filters, ...playerOptions.filters };
+		}
 
-    /**
-     * Clear all filters applied to the currently playing track
-     * @returns The current player instance
-     */
-    public clearFilters(): Player {
-        this.filters = new Filters();
-        this.node.queue.add({
-            op: OPCodes.FILTERS,
-            guildId: this.connection.guildId
-        });
+		if (typeof playerOptions.track !== 'undefined')
+			this.track = playerOptions.track.encoded ?? null;
+		if (typeof playerOptions.paused === 'boolean')
+			this.paused = playerOptions.paused;
+		if (typeof playerOptions.volume === 'number')
+			this.volume = playerOptions.volume;
+		if (typeof playerOptions.position === 'number')
+			this.position = playerOptions.position;
+	}
 
-        return this;
-    }
+	/**
+	 * Cleans this player instance
+	 * @internal
+	 */
+	public clean(): void {
+		this.removeAllListeners();
+		this.track = null;
+		this.volume = 100;
+		this.position = 0;
+		this.filters = {};
+	}
 
-    /**
-     * Resume the current track
-     * @param options An object that conforms to ResumeOptions that specify behavior on resuming
-     * @returns The current player instance
-     */
-    public resume(options: ResumeOptions = {}): Player {
-        this.updateFilters();
-        if (this.track) {
-            options = mergeDefault({ startTime: this.position, pause: this.paused }, options);
-            this.playTrack({ track: this.track, options });
-        }
+	/**
+	 * Sends server update to lavalink
+	 * @internal
+	 */
+	public async sendServerUpdate(connection: Connection): Promise<void> {
+		const playerUpdate = {
+			guildId: this.guildId,
+			playerOptions: {
+				voice: {
+					token: connection.serverUpdate!.token,
+					endpoint: connection.serverUpdate!.endpoint,
+					sessionId: connection.sessionId!
+				}
+			}
+		};
+		await this.node.rest.updatePlayer(playerUpdate);
+	}
 
-        this.emit('resumed');
-        return this;
-    }
+	/**
+	 * Handle player update data
+	 */
+	public onPlayerUpdate(json: PlayerUpdate): void {
+		const { position, ping } = json.state;
+		this.position = position;
+		this.ping = ping;
+		this.emit('update', json);
+	}
 
-    /**
-     * Update all filters via the filters operation
-     * @internal
-     */
-    private updateFilters(): void {
-        const { volume, equalizer, karaoke, timescale, tremolo, vibrato, rotation, distortion, channelMix, lowPass } = this.filters;
-        this.node.queue.add({
-            op: OPCodes.FILTERS,
-            guildId: this.connection.guildId,
-            volume,
-            equalizer,
-            karaoke,
-            timescale,
-            tremolo,
-            vibrato,
-            rotation,
-            distortion,
-            channelMix,
-            lowPass
-        });
-    }
-
-    /**
-     * Remove all event listeners on this instance
-     * @internal
-     */
-    public clean(): void {
-        this.removeAllListeners();
-        this.reset();
-    }
-
-    /**
-     * Reset the track, position and filters on this instance to defaults
-     */
-    public reset(): void {
-        this.track = null;
-        this.position = 0;
-        this.filters = new Filters();
-    }
-
-    /**
-     * Handle JSON data recieved from Lavalink
-     * @param json JSON data from Lavalink
-     * @internal
-     */
-    public onLavalinkMessage(json: any): void {
-        if (json.op === OPCodes.PLAYER_UPDATE) {
-            this.position = json.state.position;
-            // ping property require lavalink >=3.5.1
-            this.ping = json.state.ping ?? 0;
-            this.emit('update', json);
-        } else if (json.op === OPCodes.EVENT)
-            this.onPlayerEvent(json);
-        else {
-            this.node.emit('debug', this.node.name, `[Player] -> [Node] : Unknown Message OP ${json.op} | Guild: ${this.connection.guildId}`);
-        }
-    }
-
-    /**
-     * Handle player events recieved from Lavalink
-     * @param json JSON data from Lavalink
-     * @internal
-     */
-    private onPlayerEvent(json: any): void {
-        switch (json.type) {
-        case 'TrackStartEvent':
-            this.position = 0;
-            this.emit('start', json);
-            break;
-        case 'TrackEndEvent':
-            this.emit('end', json);
-            break;
-        case 'TrackStuckEvent':
-            this.emit('stuck', json);
-            break;
-        case 'TrackExceptionEvent':
-            this.emit('exception', json);
-            break;
-        case 'WebSocketClosedEvent':
-            if (!this.connection.reconnecting) {
-                if (!this.connection.moved)
-                    this.emit('closed', json);
-                else
-                    this.connection.moved = false;
-            }
-            break;
-        default:
-            this.node.emit(
-                'debug',
-                this.node.name,
-                `[Player] -> [Node] : Unknown Player Event Type ${json.type} | Guild: ${this.connection.guildId}`
-            );
-        }
-    }
+	/**
+	 * Handle player events received from Lavalink
+	 * @param json JSON data from Lavalink
+	 * @internal
+	 */
+	public onPlayerEvent(json: TrackStartEvent | TrackEndEvent | TrackStuckEvent | TrackExceptionEvent | WebSocketClosedEvent): void {
+		switch (json.type) {
+			case PlayerEventType.TRACK_START_EVENT:
+				if (this.track) this.track = json.track.encoded;
+				this.emit('start', json);
+				break;
+			case PlayerEventType.TRACK_END_EVENT:
+				this.emit('end', json);
+				break;
+			case PlayerEventType.TRACK_STUCK_EVENT:
+				this.emit('stuck', json);
+				break;
+			case PlayerEventType.TRACK_EXCEPTION_EVENT:
+				this.emit('exception', json);
+				break;
+			case PlayerEventType.WEBSOCKET_CLOSED_EVENT:
+				this.emit('closed', json);
+				break;
+			default:
+				this.node.manager.emit(
+					'debug',
+					this.node.name,
+					`[Player] -> [Node] : Unknown Player Event Type, Data => ${JSON.stringify(json)}`
+				);
+		}
+	}
 }
